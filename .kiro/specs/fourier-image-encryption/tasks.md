@@ -1,5 +1,583 @@
 # Implementation Plan: Fourier-Based Image Encryption System with AI Integration
 
+## Overview
+
+This implementation plan breaks down the Fourier-Based Image Encryption System into discrete, actionable coding tasks. The system uses Fourier Series decomposition and epicycle-based sketch reconstruction for image encryption, enhanced with AI capabilities for optimization and security.
+
+The implementation follows Clean Architecture principles with strict layer separation, SOLID design patterns, and comprehensive testing using both unit tests and property-based tests.
+
+## Tasks
+
+- [ ] 1. Project setup and core infrastructure
+  - Create project directory structure following Clean Architecture
+  - Set up Python package with `__init__.py` files in all modules
+  - Create `requirements.txt` with dependencies: numpy, opencv-python, cryptography, msgpack, hypothesis, pytest, typer, fastapi, torch, pyqtgraph, matplotlib
+  - Create base exception hierarchy in `models/exceptions.py`
+  - Set up logging configuration with structured logging support
+  - Create configuration loader in `config/settings.py` supporting YAML/JSON
+  - _Requirements: 3.11.1, 3.11.8, 3.11.9, 3.14.1, 3.14.2, 3.14.3_
+
+- [ ] 2. Data models and core types
+  - [ ] 2.1 Create Fourier coefficient data model
+    - Implement `FourierCoefficient` dataclass with frequency, amplitude, phase, complex_value fields
+    - Add validation in `__post_init__` for amplitude >= 0 and phase in [-π, π]
+    - Implement immutability using `frozen=True`
+    - _Requirements: 3.2.2_
+
+  - [ ]* 2.2 Write property test for Fourier coefficient validation
+    - **Property 3: Coefficient Structure Completeness**
+    - **Validates: Requirements 3.2.2**
+
+  - [ ] 2.3 Create contour and configuration data models
+    - Implement `Contour` dataclass with points, is_closed, length fields
+    - Implement `PreprocessConfig`, `EncryptionConfig`, `ReconstructionConfig` dataclasses
+    - Implement `SystemConfig` with `from_file` class method
+    - Implement `EncryptedPayload` dataclass with ciphertext, iv, hmac, metadata
+    - _Requirements: 3.14.2, 3.21.1, 3.23.1, 3.23.2, 3.23.3_
+
+  - [ ]* 2.4 Write property test for configuration validation
+    - **Property 26: Configuration Completeness**
+    - **Validates: Requirements 3.14.2, 3.14.3**
+
+- [ ] 3. Image processing pipeline
+  - [ ] 3.1 Implement base image processor
+    - Create `ImageProcessor` abstract base class with load_image, preprocess, validate_format methods
+    - Implement concrete `OpenCVImageProcessor` using OpenCV for loading and preprocessing
+    - Support PNG, JPG, BMP formats with validation
+    - Implement grayscale conversion, resizing with aspect ratio preservation
+    - _Requirements: 3.1.1, 3.1.2_
+
+  - [ ]* 3.2 Write unit tests for image processor
+    - Test loading various image formats
+    - Test preprocessing with different configurations
+    - Test invalid format rejection
+    - _Requirements: 3.1.1, 3.1.2_
+
+  - [ ] 3.3 Implement edge detection strategies
+    - Create `EdgeDetector` abstract base class
+    - Implement `CannyEdgeDetector` with adaptive thresholding
+    - Implement `IndustrialEdgeDetector` with GrabCut foreground extraction, Gaussian preprocessing, morphological refinement
+    - Add configurable parameters: grabcut_iterations, canny thresholds, kernel sizes
+    - _Requirements: 3.1.3, 3.1.6, 3.1.7_
+
+  - [ ]* 3.4 Write unit tests for edge detectors
+    - Test Canny edge detection on sample images
+    - Test industrial pipeline with GrabCut
+    - Test edge cases: empty images, uniform images
+    - _Requirements: 3.1.3_
+
+  - [ ]* 3.5 Write property test for empty image handling
+    - **Property 31: Empty Image Handling**
+    - **Validates: Requirements 3.1.3**
+
+  - [ ] 3.6 Implement contour extraction
+    - Create `ContourExtractor` class with extract_contours, to_complex_plane, resample_contour methods
+    - Use OpenCV findContours for contour detection
+    - Implement complex plane conversion: (x, y) → x + iy
+    - Implement uniform resampling for consistent point distribution
+    - _Requirements: 3.1.4_
+
+  - [ ]* 3.7 Write property test for complex plane round-trip
+    - **Property 1: Complex Plane Round-Trip**
+    - **Validates: Requirements 3.1.4**
+
+- [ ] 4. Checkpoint - Core image processing complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 5. Fourier transform engine
+  - [ ] 5.1 Implement Fourier transformer
+    - Create `FourierTransformer` class with compute_dft, compute_idft methods
+    - Use NumPy FFT for O(N log N) DFT computation
+    - Implement sort_by_amplitude for descending amplitude sorting
+    - Implement truncate_coefficients for selecting top N terms
+    - Support configurable coefficient count in range [10, 1000]
+    - _Requirements: 3.2.1, 3.2.3, 3.2.4, 3.2.5, 3.2.6_
+
+  - [ ]* 5.2 Write property test for DFT/IDFT round-trip
+    - **Property 2: DFT/IDFT Round-Trip**
+    - **Validates: Requirements 3.2.1, 3.2.6**
+
+  - [ ]* 5.3 Write property test for amplitude sorting
+    - **Property 4: Amplitude Sorting Invariant**
+    - **Validates: Requirements 3.2.3**
+
+  - [ ]* 5.4 Write property test for coefficient count validation
+    - **Property 5: Coefficient Count Validation**
+    - **Validates: Requirements 3.2.4**
+
+  - [ ]* 5.5 Write property test for minimum coefficient count
+    - **Property 32: Minimum Coefficient Count**
+    - **Validates: Requirements 3.2.4**
+
+  - [ ] 5.6 Implement epicycle engine
+    - Create `EpicycleState` dataclass with time, positions, trace_point fields
+    - Create `EpicycleEngine` class with compute_state, generate_animation_frames methods
+    - Compute epicycle positions: center + radius * e^(i*(frequency*t + phase))
+    - Support configurable animation speed [0.1x, 10x]
+    - Generate frames for full rotation (t: 0 → 2π)
+    - _Requirements: 3.3.1, 3.3.2, 3.3.3, 3.3.4_
+
+  - [ ]* 5.7 Write property test for epicycle radius consistency
+    - **Property 6: Epicycle Radius Consistency**
+    - **Validates: Requirements 3.3.2**
+
+  - [ ]* 5.8 Write property test for animation speed bounds
+    - **Property 7: Animation Speed Bounds**
+    - **Validates: Requirements 3.3.3**
+
+  - [ ]* 5.9 Write property test for trace path monotonic growth
+    - **Property 8: Trace Path Monotonic Growth**
+    - **Validates: Requirements 3.3.4, 3.6.2**
+
+- [ ] 6. Encryption layer
+  - [ ] 6.1 Implement key management
+    - Create `KeyManager` class with generate_salt, validate_key_strength, constant_time_compare methods
+    - Use cryptographically secure random number generation for salt
+    - Implement constant-time comparison to prevent timing attacks
+    - _Requirements: 3.4.3, 3.18.4_
+
+  - [ ]* 6.2 Write unit tests for key manager
+    - Test salt generation uniqueness
+    - Test key strength validation
+    - Test constant-time comparison
+    - _Requirements: 3.4.3_
+
+  - [ ] 6.3 Implement AES-256 encryption
+    - Create `EncryptionStrategy` abstract base class
+    - Implement `AES256Encryptor` with encrypt, decrypt, derive_key methods
+    - Use PBKDF2-HMAC-SHA256 for key derivation with 100,000+ iterations
+    - Use AES-256-GCM for encryption
+    - Generate cryptographically secure random IV for each encryption
+    - Compute HMAC-SHA256 for integrity validation
+    - Implement secure_wipe for sensitive data cleanup
+    - _Requirements: 3.4.1, 3.4.2, 3.4.3, 3.4.4, 3.4.5, 3.18.2_
+
+  - [ ]* 6.4 Write property test for IV uniqueness
+    - **Property 9: IV Uniqueness**
+    - **Validates: Requirements 3.4.3**
+
+  - [ ]* 6.5 Write property test for HMAC integrity validation
+    - **Property 10: HMAC Integrity Validation**
+    - **Validates: Requirements 3.4.4**
+
+  - [ ]* 6.6 Write property test for encryption round-trip
+    - **Property 11: Encryption Round-Trip**
+    - **Validates: Requirements 3.4.5**
+
+  - [ ]* 6.7 Write property test for wrong key rejection
+    - **Property 12: Wrong Key Rejection**
+    - **Validates: Requirements 3.4.6**
+
+  - [ ]* 6.8 Write unit test for graceful decryption failure
+    - Test decryption with incorrect key
+    - Test decryption with tampered ciphertext
+    - Verify DecryptionError is raised with descriptive message
+    - _Requirements: 3.4.6_
+
+- [ ] 7. Serialization module
+  - [ ] 7.1 Implement coefficient serializer
+    - Create `CoefficientSerializer` class with serialize, deserialize, validate_schema methods
+    - Use MessagePack for compact binary serialization
+    - Include metadata: version, coefficient count, image dimensions
+    - Handle floating-point precision consistently
+    - Validate data integrity during deserialization
+    - _Requirements: 3.5.1, 3.5.2, 3.5.3, 3.5.4_
+
+  - [ ]* 7.2 Write property test for serialization round-trip
+    - **Property 13: Serialization Round-Trip**
+    - **Validates: Requirements 3.5.1, 3.5.2, 3.5.4**
+
+  - [ ]* 7.3 Write property test for corruption detection
+    - **Property 14: Corruption Detection**
+    - **Validates: Requirements 3.5.3**
+
+- [ ] 8. Checkpoint - Core encryption pipeline complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 9. Visualization module
+  - [ ] 9.1 Implement live renderer
+    - Create `RenderObserver` interface for Observer pattern
+    - Create `LiveRenderer` class with attach_observer, render_frame, animate methods
+    - Support PyQtGraph and Matplotlib backends
+    - Draw epicycle circles with decreasing opacity for smaller ones
+    - Draw connecting lines between epicycle centers
+    - Draw trace path showing sketch formation
+    - Highlight current drawing point
+    - Maintain minimum 30 FPS for smooth visualization
+    - Support pause, resume, reset controls
+    - _Requirements: 3.3.5, 3.3.6, 3.6.1, 3.6.2, 3.6.3, 3.6.5_
+
+  - [ ]* 9.2 Write unit tests for live renderer
+    - Test frame rendering with mock epicycle states
+    - Test observer notification
+    - Test backend switching (PyQtGraph vs Matplotlib)
+    - _Requirements: 3.6.1, 3.6.5_
+
+  - [ ] 9.3 Implement monitoring dashboard
+    - Create `Metrics` dataclass with current_coefficient_index, active_radius, progress_percentage, fps, processing_time, memory_usage_mb, encryption_status
+    - Create `MonitoringDashboard` class with update_metrics, start_monitoring, display methods
+    - Implement thread-safe metrics updates
+    - Display real-time metrics without blocking main thread
+    - _Requirements: 3.7.1, 3.7.2, 3.7.3, 3.7.4, 3.7.5, 3.7.6_
+
+  - [ ]* 9.4 Write property test for progress percentage bounds
+    - **Property 15: Progress Percentage Bounds**
+    - **Validates: Requirements 3.6.4, 3.7.3**
+
+  - [ ]* 9.5 Write property test for metrics validity
+    - **Property 16: Metrics Validity**
+    - **Validates: Requirements 3.7.5**
+
+  - [ ] 9.6 Implement image reconstructor
+    - Create `ReconstructionConfig` dataclass with mode, speed, quality, save_frames, save_animation, output_format, output_path, backend fields
+    - Create `ReconstructionResult` dataclass with final_image, frames, animation_path, reconstruction_time, frame_count fields
+    - Create `ImageReconstructor` class with reconstruct_static, reconstruct_animated, save_frames, save_animation_video, save_animation_gif, render_frame_to_image methods
+    - Implement static reconstruction using IDFT for fast final image generation
+    - Implement animated reconstruction using EpicycleEngine for epicycle drawing process
+    - Support quality modes: fast (30 frames), balanced (100 frames), quality (300 frames)
+    - Support saving frames as PNG sequence
+    - Support saving animation as MP4 video using OpenCV VideoWriter
+    - Support saving animation as animated GIF using PIL
+    - Integrate with LiveRenderer for visualization
+    - _Requirements: 3.21.1, 3.21.2, 3.21.3, 3.21.4, 3.21.5, 3.21.6, 3.21.7, 3.21.8, 3.23.4, 3.23.5, 3.23.6_
+
+  - [ ]* 9.7 Write property test for reconstructor accepts valid coefficients
+    - **Property 35: Reconstructor Accepts Valid Coefficients**
+    - **Validates: Requirements 3.21.1**
+
+  - [ ]* 9.8 Write property test for static mode returns image without animation
+    - **Property 36: Static Mode Returns Image Without Animation**
+    - **Validates: Requirements 3.21.2**
+
+  - [ ]* 9.9 Write property test for animated mode generates frames
+    - **Property 37: Animated Mode Generates Frames**
+    - **Validates: Requirements 3.21.3**
+
+  - [ ]* 9.10 Write property test for epicycle engine integration consistency
+    - **Property 38: Epicycle Engine Integration Consistency**
+    - **Validates: Requirements 3.21.4**
+
+  - [ ]* 9.11 Write property test for backend compatibility
+    - **Property 39: Backend Compatibility**
+    - **Validates: Requirements 3.21.5**
+
+  - [ ]* 9.12 Write property test for output format support
+    - **Property 40: Output Format Support**
+    - **Validates: Requirements 3.21.6, 3.21.7**
+
+  - [ ]* 9.13 Write property test for reconstruction speed bounds
+    - **Property 41: Reconstruction Speed Bounds**
+    - **Validates: Requirements 3.21.8**
+
+  - [ ]* 9.14 Write property test for quality mode validation
+    - **Property 45: Quality Mode Validation**
+    - **Validates: Requirements 3.23.4**
+
+  - [ ]* 9.15 Write property test for quality mode frame counts
+    - **Property 46: Quality Mode Frame Counts**
+    - **Validates: Requirements 3.23.5, 3.23.6**
+
+- [ ] 10. AI components
+  - [ ] 10.1 Implement AI edge detector
+    - Create `AIEdgeDetector` class extending `EdgeDetector`
+    - Load pre-trained CNN or Vision Transformer model
+    - Support GPU acceleration with automatic CPU fallback
+    - Preprocess images for model input (normalize, resize)
+    - Post-process model output (threshold, morphology)
+    - Implement performance metrics tracking
+    - _Requirements: 3.8.1, 3.8.2, 3.8.3, 3.8.4, 3.8.5_
+
+  - [ ]* 10.2 Write property test for GPU fallback
+    - **Property 33: GPU Fallback**
+    - **Validates: Requirements 3.8.5**
+
+  - [ ]* 10.3 Write unit tests for AI edge detector
+    - Test model loading with version check
+    - Test inference on sample images
+    - Test GPU vs CPU execution
+    - Test fallback to Canny when AI fails
+    - _Requirements: 3.8.1, 3.8.5_
+
+  - [ ] 10.4 Implement coefficient optimizer
+    - Create `OptimizationResult` dataclass with optimal_count, complexity_class, reconstruction_error, explanation fields
+    - Create `CoefficientOptimizer` class with classify_complexity, optimize_count, compute_reconstruction_error methods
+    - Analyze image features (edges, textures, frequency content) for complexity classification
+    - Use binary search or RL-based selection to find optimal coefficient count
+    - Target reconstruction error below 5% RMSE
+    - Reduce payload size by at least 20% compared to fixed count
+    - Provide explainable insights on coefficient selection
+    - _Requirements: 3.9.1, 3.9.2, 3.9.3, 3.9.4, 3.9.5, 3.9.6_
+
+  - [ ]* 10.5 Write property test for complexity classification validity
+    - **Property 17: Complexity Classification Validity**
+    - **Validates: Requirements 3.9.1**
+
+  - [ ]* 10.6 Write property test for optimizer coefficient count bounds
+    - **Property 18: Optimizer Coefficient Count Bounds**
+    - **Validates: Requirements 3.9.2**
+
+  - [ ]* 10.7 Write property test for reconstruction error threshold
+    - **Property 19: Reconstruction Error Threshold**
+    - **Validates: Requirements 3.9.3**
+
+  - [ ]* 10.8 Write property test for optimization reduces size
+    - **Property 20: Optimization Reduces Size**
+    - **Validates: Requirements 3.9.4**
+
+  - [ ]* 10.9 Write property test for optimization explanation presence
+    - **Property 21: Optimization Explanation Presence**
+    - **Validates: Requirements 3.9.6**
+
+  - [ ] 10.10 Implement anomaly detector
+    - Create `AnomalyReport` dataclass with is_anomalous, confidence, anomaly_type, severity, details fields
+    - Create `AnomalyDetector` class with detect, validate_distribution methods
+    - Check for unusual amplitude distribution (should follow power law)
+    - Check for phase discontinuities
+    - Detect statistical outliers
+    - Detect frequency gaps
+    - Achieve 95% detection accuracy
+    - Complete detection within 1 second
+    - Log anomaly events with severity levels
+    - _Requirements: 3.10.1, 3.10.2, 3.10.3, 3.10.4, 3.10.5_
+
+  - [ ]* 10.11 Write property test for tampered payload detection
+    - **Property 22: Tampered Payload Detection**
+    - **Validates: Requirements 3.10.1**
+
+  - [ ]* 10.12 Write property test for coefficient distribution validation
+    - **Property 23: Coefficient Distribution Validation**
+    - **Validates: Requirements 3.10.3**
+
+  - [ ]* 10.13 Write property test for anomaly severity validity
+    - **Property 24: Anomaly Severity Validity**
+    - **Validates: Requirements 3.10.5**
+
+- [ ] 11. Checkpoint - AI components complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 12. Application orchestrator
+  - [ ] 12.1 Implement encryption orchestrator
+    - Create `EncryptionOrchestrator` class with dependency injection for all components
+    - Implement encrypt_image method coordinating full encryption pipeline
+    - Implement decrypt_image method coordinating full decryption pipeline
+    - Implement reconstruct_from_coefficients method for image reconstruction
+    - Support optional AI optimization, anomaly detection, and reconstruction
+    - Support optional visualization during decryption
+    - Integrate monitoring dashboard for real-time metrics
+    - Handle errors gracefully with proper exception propagation
+    - _Requirements: 3.22.1, 3.22.2_
+
+  - [ ]* 12.2 Write property test for conditional reconstruction based on config
+    - **Property 42: Conditional Reconstruction Based on Config**
+    - **Validates: Requirements 3.22.1**
+
+  - [ ]* 12.3 Write property test for reconstruction configuration completeness
+    - **Property 44: Reconstruction Configuration Completeness**
+    - **Validates: Requirements 3.23.1, 3.23.2, 3.23.3**
+
+  - [ ]* 12.4 Write integration tests for encryption workflow
+    - Test full encryption pipeline: image → encrypted payload
+    - Test with AI optimization enabled/disabled
+    - Test with different image types and sizes
+    - _Requirements: 3.1.1, 3.4.1, 3.5.1_
+
+  - [ ]* 12.5 Write integration tests for decryption workflow
+    - Test full decryption pipeline: encrypted payload → reconstructed image
+    - Test with visualization enabled/disabled
+    - Test with reconstruction enabled/disabled
+    - Test anomaly detection integration
+    - _Requirements: 3.4.1, 3.5.1, 3.10.1_
+
+  - [ ]* 12.6 Write property test for concurrent encryption safety
+    - **Property 34: Concurrent Encryption Safety**
+    - **Validates: Requirements 3.13.3**
+
+- [ ] 13. CLI interface
+  - [ ] 13.1 Implement CLI commands
+    - Create CLI using Typer framework
+    - Implement `encrypt` command with --input, --output, --key, --visualize flags
+    - Implement `decrypt` command with --input, --output, --key, --visualize flags
+    - Add --reconstruct flag to enable reconstruction after decryption
+    - Add --save-animation flag to save reconstruction animation to file
+    - Add --reconstruction-speed flag to control animation speed
+    - Add --config flag for custom configuration file
+    - Implement help documentation for all commands
+    - Display progress bars for long operations using rich or tqdm
+    - Handle errors gracefully with user-friendly messages
+    - _Requirements: 3.15.1, 3.15.2, 3.15.3, 3.15.4, 3.15.5, 3.22.2, 3.22.3, 3.22.4_
+
+  - [ ]* 13.2 Write unit tests for CLI commands
+    - Test command parsing and validation
+    - Test error handling for invalid inputs
+    - Test progress bar display (mock)
+    - _Requirements: 3.15.1, 3.15.2, 3.15.3_
+
+  - [ ]* 13.3 Write property test for input validation prevents injection
+    - **Property 29: Input Validation Prevents Injection**
+    - **Validates: Requirements 3.18.3**
+
+- [ ] 14. REST API interface (optional)
+  - [ ] 14.1 Implement FastAPI endpoints
+    - Create FastAPI application with CORS middleware
+    - Implement POST /encrypt endpoint accepting image file and key
+    - Implement POST /decrypt endpoint accepting encrypted payload and key
+    - Implement POST /reconstruct endpoint accepting encrypted payload and returning reconstruction data
+    - Support streaming reconstruction frames for real-time visualization
+    - Implement rate limiting using slowapi
+    - Implement authentication using API keys or JWT
+    - Return JSON responses with proper HTTP status codes
+    - Include OpenAPI documentation with Swagger UI
+    - _Requirements: 3.16.1, 3.16.2, 3.16.3, 3.16.4, 3.16.5, 3.22.5, 3.22.6_
+
+  - [ ]* 14.2 Write property test for API response structure
+    - **Property 27: API Response Structure**
+    - **Validates: Requirements 3.16.4**
+
+  - [ ]* 14.3 Write integration tests for API endpoints
+    - Test /encrypt endpoint with various inputs
+    - Test /decrypt endpoint with valid/invalid payloads
+    - Test /reconstruct endpoint with streaming
+    - Test rate limiting and authentication
+    - Test error responses
+    - _Requirements: 3.16.1, 3.16.2, 3.16.3_
+
+  - [ ]* 14.4 Write property test for frame streaming progressiveness
+    - **Property 43: Frame Streaming Progressiveness**
+    - **Validates: Requirements 3.22.6**
+
+- [ ] 15. Security hardening
+  - [ ] 15.1 Implement security measures
+    - Ensure encryption keys are never logged or displayed
+    - Implement secure memory wiping for sensitive data
+    - Validate all user inputs to prevent injection attacks
+    - Use constant-time comparison for key validation
+    - Document security assumptions and threat model in README
+    - _Requirements: 3.18.1, 3.18.2, 3.18.3, 3.18.4, 3.18.5_
+
+  - [ ]* 15.2 Write property test for key material never logged
+    - **Property 28: Key Material Never Logged**
+    - **Validates: Requirements 3.18.1**
+
+  - [ ]* 15.3 Write unit tests for security measures
+    - Test that keys don't appear in logs
+    - Test input sanitization
+    - Test constant-time comparison
+    - _Requirements: 3.18.1, 3.18.3, 3.18.4_
+
+- [ ] 16. AI model management
+  - [ ] 16.1 Implement model loading and versioning
+    - Create model repository pattern for loading AI models
+    - Support loading pre-trained models from disk with version check
+    - Implement model metadata with semantic versioning
+    - Support PyTorch and TensorFlow backends
+    - Provide training scripts for custom datasets (separate from main system)
+    - Include model evaluation metrics in metadata
+    - _Requirements: 3.19.1, 3.19.2, 3.19.3, 3.19.4, 3.19.5_
+
+  - [ ]* 16.2 Write property test for model version metadata
+    - **Property 30: Model Version Metadata**
+    - **Validates: Requirements 3.19.3**
+
+  - [ ]* 16.3 Write unit tests for model management
+    - Test model loading with version validation
+    - Test backend switching (PyTorch vs TensorFlow)
+    - Test model not found error handling
+    - _Requirements: 3.19.1, 3.19.3, 3.19.4_
+
+- [ ] 17. Checkpoint - Full system integration complete
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 18. Configuration and documentation
+  - [ ] 18.1 Create configuration files
+    - Create default configuration YAML file with all settings
+    - Create example configurations for different use cases (fast, balanced, quality)
+    - Document all configuration options with comments
+    - Implement environment-specific overrides (dev, prod)
+    - _Requirements: 3.14.1, 3.14.2, 3.14.4_
+
+  - [ ] 18.2 Write comprehensive documentation
+    - Create README.md with project overview, installation, usage examples
+    - Document security assumptions and threat model
+    - Create API documentation for all public interfaces
+    - Add docstrings to all classes and functions following Google style
+    - Create examples directory with sample scripts
+    - Document extension points for custom algorithms and AI models
+    - _Requirements: 3.11.7, 3.18.5, 3.20.3_
+
+- [ ] 19. Testing infrastructure
+  - [ ] 19.1 Set up testing framework
+    - Configure pytest with coverage reporting
+    - Create test fixtures for sample images, configurations, mock models
+    - Set up hypothesis for property-based testing with 100 iterations minimum
+    - Create test data directory with various image samples
+    - Configure test markers for unit, integration, property tests
+    - _Requirements: 3.17.1, 3.17.4, 3.17.5_
+
+  - [ ]* 19.2 Write remaining property tests
+    - **Property 25: Exception Type Correctness** (Requirements 3.11.8)
+    - Implement any remaining property tests not covered in previous tasks
+    - Ensure all 46 correctness properties have corresponding tests
+    - Tag each test with feature name and property number
+
+  - [ ]* 19.3 Write performance benchmarks
+    - Create benchmark suite for image processing time vs resolution
+    - Benchmark DFT computation time vs number of points
+    - Benchmark encryption time vs coefficient count
+    - Benchmark AI model inference time (GPU vs CPU)
+    - Profile memory usage during operations
+    - _Requirements: 3.17.3_
+
+- [ ] 20. Main entry point and wiring
+  - [ ] 20.1 Create main application entry point
+    - Implement `main.py` with application initialization
+    - Wire all components together using dependency injection
+    - Load configuration and initialize logging
+    - Create factory functions for component instantiation
+    - Handle graceful shutdown and cleanup
+    - _Requirements: 3.11.3_
+
+  - [ ] 20.2 Implement factory pattern for encryption strategies
+    - Create `EncryptionFactory` for selecting encryption algorithms
+    - Support AES-256 and future post-quantum algorithms
+    - Use configuration to determine which strategy to instantiate
+    - _Requirements: 3.12.1, 3.20.1_
+
+  - [ ] 20.3 Implement strategy pattern for edge detection
+    - Create factory for selecting edge detection strategy (Canny, Industrial, AI)
+    - Use configuration to determine which strategy to use
+    - _Requirements: 3.12.2_
+
+  - [ ]* 20.4 Write integration tests for full system
+    - Test end-to-end encryption and decryption with all features enabled
+    - Test with different configurations (AI on/off, visualization on/off, reconstruction on/off)
+    - Test error handling across component boundaries
+    - Verify all components work together correctly
+    - _Requirements: 3.17.2_
+
+- [ ] 21. Final checkpoint - Complete system validation
+  - Run full test suite (unit, property, integration tests)
+  - Verify code coverage exceeds 80%
+  - Run security scans (bandit)
+  - Run linters (flake8, mypy) and formatters (black)
+  - Test CLI commands manually with sample images
+  - Test API endpoints manually (if implemented)
+  - Verify all 46 correctness properties are tested
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Notes
+
+- Tasks marked with `*` are optional and can be skipped for faster MVP
+- Each task references specific requirements for traceability
+- Property tests validate universal correctness properties across all inputs
+- Unit tests validate specific examples, edge cases, and error conditions
+- Integration tests validate end-to-end workflows
+- Checkpoints ensure incremental validation at major milestones
+- The system uses Python 3.9+ with type hints throughout
+- All components follow Clean Architecture and SOLID principles
+- Security is built in from the start, not added later
+- AI components are optional and gracefully degrade if unavailable
+# Implementation Plan: Fourier-Based Image Encryption System with AI Integration
+
 ## Quick Status Overview
 
 **System Status:** Production-ready core with testing and documentation in progress
@@ -466,14 +1044,14 @@ Tasks 19.5-19.9 implement a dedicated ImageReconstructor module that visualizes 
   - Verify that AI components integrate with core encryption system
   - Ask the user if questions arise
 
-- [x] 19.5 Image reconstruction module
-  - [x] 19.5.1 Implement ReconstructionConfig and ReconstructionResult data models
+- [ ] 19.5 Image reconstruction module
+  - [ ] 19.5.1 Implement ReconstructionConfig and ReconstructionResult data models
     - Create ReconstructionConfig dataclass with mode, speed, quality, output settings
     - Implement get_frame_count() method for quality-based frame counts
     - Create ReconstructionResult dataclass for reconstruction output
     - _Requirements: 3.21.1, 3.23.1, 3.23.2, 3.23.3, 3.23.4_
   
-  - [x] 19.5.2 Implement ImageReconstructor class
+  - [ ] 19.5.2 Implement ImageReconstructor class
     - Implement constructor accepting ReconstructionConfig
     - Implement reconstruct_static() for fast final image generation using IDFT
     - Implement reconstruct_animated() for epicycle animation generation
@@ -482,7 +1060,7 @@ Tasks 19.5-19.9 implement a dedicated ImageReconstructor module that visualizes 
     - Support both PyQtGraph and Matplotlib backends
     - _Requirements: 3.21.1, 3.21.2, 3.21.3, 3.21.4, 3.21.5_
   
-  - [x] 19.5.3 Implement frame and animation saving
+  - [ ] 19.5.3 Implement frame and animation saving
     - Implement save_frames() to save PNG sequence
     - Implement save_animation_video() to save MP4 using OpenCV VideoWriter
     - Implement save_animation_gif() to save animated GIF using PIL
@@ -510,15 +1088,15 @@ Tasks 19.5-19.9 implement a dedicated ImageReconstructor module that visualizes 
     - Test error handling for invalid configurations
     - _Requirements: 3.21.2, 3.21.3, 3.21.6, 3.21.7, 3.21.5_
 
-- [x] 19.6 Reconstruction integration with orchestrator
-  - [x] 19.6.1 Update EncryptionOrchestrator
+- [ ] 19.6 Reconstruction integration with orchestrator
+  - [ ] 19.6.1 Update EncryptionOrchestrator
     - Add optional ImageReconstructor parameter to constructor
     - Implement reconstruct_from_coefficients() method
     - Update decrypt_image() to support optional reconstruction
     - Add reconstruction_enabled flag to EncryptionConfig
     - _Requirements: 3.22.1_
   
-  - [x] 19.6.2 Update configuration management
+  - [ ] 19.6.2 Update configuration management
     - Add ReconstructionConfig to SystemConfig
     - Update configuration loading to include reconstruction settings
     - Update configuration validation for reconstruction parameters
@@ -537,8 +1115,8 @@ Tasks 19.5-19.9 implement a dedicated ImageReconstructor module that visualizes 
     - Test reconstruction disabled when config flag is False
     - _Requirements: 3.22.1, 3.23.4, 3.23.5, 3.23.6_
 
-- [x] 19.7 CLI integration for reconstruction
-  - [x] 19.7.1 Add reconstruction CLI flags
+- [ ] 19.7 CLI integration for reconstruction
+  - [ ] 19.7.1 Add reconstruction CLI flags
     - Add --reconstruct flag to decrypt command
     - Add --save-animation flag with path argument
     - Add --reconstruction-speed flag with float argument (0.1-10.0)
@@ -556,15 +1134,15 @@ Tasks 19.5-19.9 implement a dedicated ImageReconstructor module that visualizes 
     - Test invalid flag combinations raise errors
     - _Requirements: 3.22.2, 3.22.3, 3.22.4_
 
-- [x] 19.8 API integration for reconstruction
-  - [x] 19.8.1 Add /reconstruct endpoint
+- [ ] 19.8 API integration for reconstruction
+  - [ ] 19.8.1 Add /reconstruct endpoint
     - Implement POST /reconstruct endpoint accepting encrypted payload and key
     - Return reconstruction result with final image and metadata
     - Support query parameters for mode, speed, quality
     - Add proper error handling and status codes
     - _Requirements: 3.22.5_
   
-  - [x] 19.8.2 Implement frame streaming for /reconstruct
+  - [ ] 19.8.2 Implement frame streaming for /reconstruct
     - Implement streaming response for animated reconstruction
     - Stream frames progressively as they are generated
     - Support Server-Sent Events (SSE) or WebSocket for real-time updates
@@ -582,7 +1160,7 @@ Tasks 19.5-19.9 implement a dedicated ImageReconstructor module that visualizes 
     - Test authentication and rate limiting for /reconstruct
     - _Requirements: 3.22.5, 3.22.6_
 
-- [x] 19.9 Checkpoint - Reconstruction module complete
+- [ ] 19.9 Checkpoint - Reconstruction module complete
   - Ensure all tests pass for ImageReconstructor and integrations
   - Verify reconstruction works with both visualization backends
   - Verify CLI and API reconstruction features work end-to-end

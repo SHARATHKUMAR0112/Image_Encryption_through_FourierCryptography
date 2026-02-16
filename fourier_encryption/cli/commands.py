@@ -395,6 +395,37 @@ def decrypt(
         "-v",
         help="Enable live epicycle animation during decryption",
     ),
+    reconstruct: bool = typer.Option(
+        False,
+        "--reconstruct",
+        "-r",
+        help="Enable image reconstruction after decryption",
+    ),
+    save_animation: Optional[Path] = typer.Option(
+        None,
+        "--save-animation",
+        help="Path to save reconstruction animation (MP4, GIF, or directory for PNG sequence)",
+        file_okay=True,
+        dir_okay=True,
+        writable=True,
+    ),
+    reconstruction_speed: float = typer.Option(
+        1.0,
+        "--reconstruction-speed",
+        help="Reconstruction animation speed multiplier (0.1-10.0)",
+        min=0.1,
+        max=10.0,
+    ),
+    reconstruction_quality: str = typer.Option(
+        "balanced",
+        "--reconstruction-quality",
+        help="Reconstruction quality mode: fast (30 frames), balanced (100 frames), quality (300 frames)",
+    ),
+    output_format: str = typer.Option(
+        "mp4",
+        "--output-format",
+        help="Output format for reconstruction animation: mp4, gif, png_sequence",
+    ),
     config: Optional[Path] = typer.Option(
         None,
         "--config",
@@ -418,11 +449,13 @@ def decrypt(
     Decrypt an encrypted image and optionally visualize the reconstruction.
     
     This command decrypts the encrypted payload, reconstructs the Fourier
-    coefficients, and optionally displays a live epicycle animation.
+    coefficients, and optionally displays a live epicycle animation or
+    performs image reconstruction.
     
     Example:
         fourier-encrypt decrypt -i encrypted.json -o contour.npy -k mypassword
         fourier-encrypt decrypt -i encrypted.json -o contour.npy -k mypassword --visualize
+        fourier-encrypt decrypt -i encrypted.json -o contour.npy -k mypassword --reconstruct --save-animation output.mp4
     """
     console.print(Panel.fit(
         "[bold cyan]Fourier-Based Image Decryption[/bold cyan]",
@@ -489,6 +522,13 @@ def decrypt(
         settings_table.add_row("Visualization", "Enabled" if visualize else "Disabled")
         if visualize:
             settings_table.add_row("Animation Speed", f"{speed}x")
+        settings_table.add_row("Reconstruction", "Enabled" if reconstruct else "Disabled")
+        if reconstruct:
+            settings_table.add_row("Reconstruction Speed", f"{reconstruction_speed}x")
+            settings_table.add_row("Reconstruction Quality", reconstruction_quality)
+            if save_animation:
+                settings_table.add_row("Save Animation", str(save_animation))
+                settings_table.add_row("Output Format", output_format)
         console.print(settings_table)
         console.print()
         
@@ -535,6 +575,58 @@ def decrypt(
             task = progress.add_task("[cyan]Saving reconstructed contour...", total=None)
             np.save(validated_output, reconstructed_points)
             progress.update(task, completed=True)
+        
+        # Perform reconstruction if requested
+        if reconstruct:
+            console.print()
+            console.print("[cyan]Starting image reconstruction...[/cyan]")
+            
+            try:
+                # Deserialize coefficients for reconstruction
+                from fourier_encryption.transmission.serializer import CoefficientSerializer
+                from fourier_encryption.models.data_models import ReconstructionConfig
+                serializer = CoefficientSerializer()
+                
+                # Decrypt again to get coefficients
+                from fourier_encryption.encryption.aes_encryptor import AES256Encryptor
+                encryptor = AES256Encryptor()
+                salt = bytes.fromhex(encrypted_payload.metadata["salt"])
+                derived_key = encryptor.derive_key(key, salt)
+                decrypted_data = encryptor.decrypt(encrypted_payload, derived_key)
+                coefficients, _ = serializer.deserialize(decrypted_data)
+                
+                # Create reconstruction config
+                recon_config = ReconstructionConfig(
+                    mode="animated" if save_animation else "static",
+                    speed=reconstruction_speed,
+                    quality=reconstruction_quality,
+                    save_frames=False,
+                    save_animation=save_animation is not None,
+                    output_format=output_format,
+                    output_path=str(save_animation) if save_animation else None,
+                    backend="matplotlib"
+                )
+                
+                # Perform reconstruction
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=console,
+                ) as progress:
+                    task = progress.add_task("[cyan]Reconstructing image...", total=None)
+                    result = orchestrator.reconstruct_from_coefficients(coefficients, recon_config)
+                    progress.update(task, completed=True)
+                
+                console.print(f"[green]Reconstruction complete![/green]")
+                console.print(f"Frame count: [yellow]{result.frame_count}[/yellow]")
+                console.print(f"Reconstruction time: [yellow]{result.reconstruction_time:.2f}s[/yellow]")
+                
+                if result.animation_path:
+                    console.print(f"Animation saved to: [cyan]{result.animation_path}[/cyan]")
+                
+            except Exception as e:
+                console.print(f"[yellow]Warning: Reconstruction failed: {e}[/yellow]")
+                logger.warning(f"Reconstruction failed: {e}")
         
         # Display success message
         console.print()

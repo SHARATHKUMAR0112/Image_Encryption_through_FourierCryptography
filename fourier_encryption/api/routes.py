@@ -664,6 +664,183 @@ async def visualize_animation(
         )
 
 
+@app.post(
+    "/reconstruct",
+    summary="Reconstruct image from encrypted payload",
+    description="Decrypt payload and perform image reconstruction with optional animation",
+    tags=["reconstruction"],
+)
+async def reconstruct_image(
+    ciphertext: str = Form(..., description="Base64-encoded ciphertext"),
+    iv: str = Form(..., description="Base64-encoded initialization vector"),
+    hmac: str = Form(..., description="Base64-encoded HMAC"),
+    metadata: str = Form(..., description="JSON-encoded metadata"),
+    key: str = Form(..., description="Decryption password/key"),
+    mode: str = Form("static", description="Reconstruction mode: static or animated"),
+    speed: float = Form(1.0, description="Animation speed multiplier (0.1-10.0)"),
+    quality: str = Form("balanced", description="Quality mode: fast, balanced, quality"),
+    username: str = Depends(authenticate),
+    orchestrator: EncryptionOrchestrator = Depends(get_orchestrator),
+):
+    """
+    Reconstruct image from encrypted payload.
+    
+    This endpoint decrypts the payload and performs image reconstruction
+    using the ImageReconstructor module. Supports both static (final image only)
+    and animated (epicycle drawing process) modes.
+    
+    Args:
+        ciphertext: Base64-encoded encrypted data
+        iv: Base64-encoded initialization vector
+        hmac: Base64-encoded HMAC authentication tag
+        metadata: JSON-encoded metadata dictionary
+        key: Decryption password
+        mode: Reconstruction mode (static or animated)
+        speed: Animation speed multiplier
+        quality: Quality mode (fast, balanced, quality)
+        username: Authenticated username (from dependency)
+        orchestrator: Encryption orchestrator instance (from dependency)
+        
+    Returns:
+        JSON response containing reconstruction result
+        
+    Raises:
+        HTTPException: If reconstruction fails
+    """
+    logger.info(
+        f"Reconstruction request received from user: {username}",
+        extra={"mode": mode, "quality": quality, "user": username}
+    )
+    
+    try:
+        import json
+        from fourier_encryption.models.data_models import ReconstructionConfig
+        
+        # Validate decryption key
+        try:
+            InputValidator.validate_key(key, min_length=8)
+        except (ValueError, TypeError) as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid decryption key: {str(e)}"
+            )
+        
+        # Validate reconstruction parameters
+        if mode not in ["static", "animated"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="mode must be 'static' or 'animated'"
+            )
+        
+        if not (0.1 <= speed <= 10.0):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="speed must be between 0.1 and 10.0"
+            )
+        
+        if quality not in ["fast", "balanced", "quality"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="quality must be 'fast', 'balanced', or 'quality'"
+            )
+        
+        # Decode base64 data
+        try:
+            ciphertext_bytes = base64.b64decode(ciphertext)
+            iv_bytes = base64.b64decode(iv)
+            hmac_bytes = base64.b64decode(hmac)
+            metadata_dict = json.loads(metadata)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid input encoding: {str(e)}"
+            )
+        
+        # Create EncryptedPayload
+        encrypted_payload = EncryptedPayload(
+            ciphertext=ciphertext_bytes,
+            iv=iv_bytes,
+            hmac=hmac_bytes,
+            metadata=metadata_dict,
+        )
+        
+        # Decrypt and get coefficients
+        salt = bytes.fromhex(metadata_dict["salt"])
+        derived_key = orchestrator.encryptor.derive_key(key, salt)
+        decrypted_data = orchestrator.encryptor.decrypt(encrypted_payload, derived_key)
+        
+        # Deserialize coefficients
+        coefficients, _ = orchestrator.serializer.deserialize(decrypted_data)
+        
+        # Create reconstruction config
+        recon_config = ReconstructionConfig(
+            mode=mode,
+            speed=speed,
+            quality=quality,
+            save_frames=False,
+            save_animation=False,
+            output_format="mp4",
+            output_path=None,
+            backend="matplotlib"
+        )
+        
+        # Perform reconstruction
+        result = orchestrator.reconstruct_from_coefficients(coefficients, recon_config)
+        
+        # Convert final image to base64 for response
+        import cv2
+        _, buffer = cv2.imencode('.png', result.final_image)
+        image_base64 = base64.b64encode(buffer).decode('utf-8')
+        
+        response_data = {
+            "status": "success",
+            "message": "Reconstruction completed successfully",
+            "reconstruction": {
+                "final_image": image_base64,
+                "frame_count": result.frame_count,
+                "reconstruction_time": result.reconstruction_time,
+                "mode": mode,
+                "quality": quality,
+            },
+            "dimensions": metadata_dict.get("dimensions", [0, 0]),
+        }
+        
+        logger.info(
+            f"Reconstruction completed for user: {username}",
+            extra={
+                "frame_count": result.frame_count,
+                "reconstruction_time": result.reconstruction_time,
+                "user": username
+            }
+        )
+        
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content=response_data
+        )
+    
+    except DecryptionError as e:
+        logger.error(f"Decryption error during reconstruction: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Decryption failed: {str(e)}"
+        )
+    
+    except ConfigurationError as e:
+        logger.error(f"Configuration error during reconstruction: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Reconstruction not configured: {str(e)}"
+        )
+    
+    except Exception as e:
+        logger.error(f"Unexpected error during reconstruction: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
 # Exception handlers for better error responses
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):

@@ -20,12 +20,19 @@ from fourier_encryption.core.fourier_transformer import FourierTransformer
 from fourier_encryption.core.image_processor import ImageProcessor
 from fourier_encryption.encryption.base_encryptor import EncryptionStrategy
 from fourier_encryption.encryption.key_manager import KeyManager
-from fourier_encryption.models.data_models import EncryptedPayload, FourierCoefficient
+from fourier_encryption.models.data_models import (
+    EncryptedPayload,
+    FourierCoefficient,
+    ReconstructionConfig,
+    ReconstructionResult,
+)
 from fourier_encryption.models.exceptions import (
+    ConfigurationError,
     EncryptionError,
     ImageProcessingError,
 )
 from fourier_encryption.transmission.serializer import CoefficientSerializer
+from fourier_encryption.visualization.image_reconstructor import ImageReconstructor
 
 
 logger = logging.getLogger(__name__)
@@ -71,6 +78,7 @@ class EncryptionOrchestrator:
         key_manager: KeyManager,
         optimizer: Optional[object] = None,
         anomaly_detector: Optional[object] = None,
+        reconstructor: Optional[ImageReconstructor] = None,
     ):
         """
         Initialize the encryption orchestrator with all required components.
@@ -85,6 +93,7 @@ class EncryptionOrchestrator:
             key_manager: Key management component
             optimizer: Optional AI coefficient optimizer
             anomaly_detector: Optional AI anomaly detector
+            reconstructor: Optional ImageReconstructor for reconstruction after decryption
         """
         self.image_processor = image_processor
         self.edge_detector = edge_detector
@@ -95,12 +104,14 @@ class EncryptionOrchestrator:
         self.key_manager = key_manager
         self.optimizer = optimizer
         self.anomaly_detector = anomaly_detector
+        self.reconstructor = reconstructor
         
         logger.info(
             "EncryptionOrchestrator initialized",
             extra={
                 "has_optimizer": optimizer is not None,
                 "has_anomaly_detector": anomaly_detector is not None,
+                "has_reconstructor": reconstructor is not None,
             }
         )
     
@@ -311,6 +322,7 @@ class EncryptionOrchestrator:
         payload: EncryptedPayload,
         key: str,
         visualize: bool = False,
+        reconstruct: bool = False,
     ) -> np.ndarray:
         """
         Execute the complete decryption pipeline.
@@ -320,12 +332,14 @@ class EncryptionOrchestrator:
         2. Decrypt payload
         3. Deserialize coefficients
         4. Reconstruct via IDFT or epicycle animation
-        5. Return reconstructed contour points
+        5. Optionally perform image reconstruction (if reconstruct=True)
+        6. Return reconstructed contour points
         
         Args:
             payload: EncryptedPayload containing encrypted coefficients
             key: Decryption password/key
             visualize: If True, use epicycle animation for reconstruction
+            reconstruct: If True, perform image reconstruction after decryption
             
         Returns:
             NumPy array of reconstructed contour points (complex numbers)
@@ -336,7 +350,7 @@ class EncryptionOrchestrator:
         """
         logger.info(
             "Starting decryption pipeline",
-            extra={"visualize": visualize}
+            extra={"visualize": visualize, "reconstruct": reconstruct}
         )
         
         try:
@@ -427,3 +441,68 @@ class EncryptionOrchestrator:
                 f"Decryption pipeline failed: {e}",
                 context={"error": str(e)}
             )
+
+    
+    def reconstruct_from_coefficients(
+        self,
+        coefficients: List[FourierCoefficient],
+        config: ReconstructionConfig,
+    ) -> ReconstructionResult:
+        """
+        Perform image reconstruction from decrypted coefficients.
+        
+        This method is called after decryption to visualize the reconstruction
+        process using epicycles. Can be called independently for reconstruction
+        without full decryption workflow.
+        
+        Args:
+            coefficients: List of Fourier coefficients to reconstruct from
+            config: ReconstructionConfig specifying reconstruction parameters
+            
+        Returns:
+            ReconstructionResult with final image, frames, and metadata
+            
+        Raises:
+            ConfigurationError: If ImageReconstructor not configured
+        """
+        if not self.reconstructor:
+            raise ConfigurationError("ImageReconstructor not configured")
+        
+        logger.info(
+            "Starting image reconstruction",
+            extra={
+                "mode": config.mode,
+                "quality": config.quality,
+                "coefficient_count": len(coefficients),
+            }
+        )
+        
+        if config.mode == "static":
+            # Static reconstruction - final image only
+            logger.debug("Performing static reconstruction")
+            image = self.reconstructor.reconstruct_static(coefficients)
+            
+            result = ReconstructionResult(
+                final_image=image,
+                reconstruction_time=0.0,
+                frame_count=1
+            )
+            
+            logger.info("Static reconstruction complete")
+            return result
+        else:
+            # Animated reconstruction - epicycle drawing process
+            logger.debug("Performing animated reconstruction")
+            engine = EpicycleEngine(coefficients)
+            result = self.reconstructor.reconstruct_animated(coefficients, engine)
+            
+            logger.info(
+                "Animated reconstruction complete",
+                extra={
+                    "frame_count": result.frame_count,
+                    "reconstruction_time": result.reconstruction_time,
+                    "animation_path": result.animation_path,
+                }
+            )
+            
+            return result

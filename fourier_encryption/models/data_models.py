@@ -363,3 +363,123 @@ class EdgeDetectionConfig:
             raise ValueError(
                 f"morph_kernel_size must be at least 1, got {self.morph_kernel_size}"
             )
+
+
+@dataclass
+class ReconstructionConfig:
+    """
+    Configuration for image reconstruction from Fourier coefficients.
+    
+    Controls reconstruction mode (static vs animated), animation speed,
+    quality settings, and output format options.
+    
+    Attributes:
+        mode: Reconstruction mode - "static" (final image only) or "animated" (epicycle drawing process)
+        speed: Animation speed multiplier in [0.1, 10.0] (default: 1.0)
+        quality: Quality mode - "fast" (30 frames), "balanced" (100 frames), or "quality" (300 frames)
+        save_frames: Whether to save individual frames as PNG sequence (default: False)
+        save_animation: Whether to save animation as video/GIF file (default: False)
+        output_format: Output format - "mp4", "gif", or "png_sequence" (default: "mp4")
+        output_path: Path for saving output files (optional)
+        backend: Visualization backend - "pyqtgraph" or "matplotlib" (default: "pyqtgraph")
+    """
+    mode: str = "animated"
+    speed: float = 1.0
+    quality: str = "balanced"
+    save_frames: bool = False
+    save_animation: bool = False
+    output_format: str = "mp4"
+    output_path: Optional[str] = None
+    backend: str = "pyqtgraph"
+    
+    def __post_init__(self):
+        """Validate reconstruction configuration parameters."""
+        valid_modes = {"static", "animated"}
+        if self.mode not in valid_modes:
+            raise ValueError(
+                f"mode must be one of {valid_modes}, got '{self.mode}'"
+            )
+        
+        if not (0.1 <= self.speed <= 10.0):
+            raise ValueError(
+                f"speed must be in [0.1, 10.0], got {self.speed}"
+            )
+        
+        valid_qualities = {"fast", "balanced", "quality"}
+        if self.quality not in valid_qualities:
+            raise ValueError(
+                f"quality must be one of {valid_qualities}, got '{self.quality}'"
+            )
+        
+        valid_formats = {"mp4", "gif", "png_sequence"}
+        if self.output_format not in valid_formats:
+            raise ValueError(
+                f"output_format must be one of {valid_formats}, got '{self.output_format}'"
+            )
+        
+        valid_backends = {"pyqtgraph", "matplotlib"}
+        if self.backend not in valid_backends:
+            raise ValueError(
+                f"backend must be one of {valid_backends}, got '{self.backend}'"
+            )
+    
+    def get_frame_count(self) -> int:
+        """
+        Return frame count based on quality mode.
+        
+        Returns:
+            30 for "fast", 100 for "balanced", 300 for "quality"
+        """
+        quality_to_frames = {
+            "fast": 30,
+            "balanced": 100,
+            "quality": 300
+        }
+        return quality_to_frames[self.quality]
+
+
+@dataclass
+class ReconstructionResult:
+    """
+    Result of image reconstruction operation.
+    
+    Contains the final reconstructed image, optional animation frames,
+    and metadata about the reconstruction process.
+    
+    Attributes:
+        final_image: Final reconstructed image as NumPy array
+        frames: List of animation frames (if saved), None otherwise
+        animation_path: Path to saved animation file (if saved), None otherwise
+        reconstruction_time: Time taken for reconstruction in seconds
+        frame_count: Number of frames generated during reconstruction
+    """
+    final_image: np.ndarray
+    frames: Optional[List[np.ndarray]] = None
+    animation_path: Optional[str] = None
+    reconstruction_time: float = 0.0
+    frame_count: int = 0
+    
+    def __post_init__(self):
+        """Validate reconstruction result after initialization."""
+        if not isinstance(self.final_image, np.ndarray):
+            raise TypeError("final_image must be a NumPy array")
+        
+        if self.final_image.size == 0:
+            raise ValueError("final_image cannot be empty")
+        
+        if self.frames is not None:
+            if not isinstance(self.frames, list):
+                raise TypeError("frames must be a list or None")
+            
+            if not all(isinstance(frame, np.ndarray) for frame in self.frames):
+                raise TypeError("all frames must be NumPy arrays")
+        
+        if self.reconstruction_time < 0:
+            raise ValueError(
+                f"reconstruction_time must be non-negative, got {self.reconstruction_time}"
+            )
+        
+        if self.frame_count < 0:
+            raise ValueError(
+                f"frame_count must be non-negative, got {self.frame_count}"
+            )

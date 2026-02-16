@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from fourier_encryption.models.data_models import ReconstructionConfig
 from fourier_encryption.models.exceptions import ConfigurationError
 
 
@@ -46,6 +47,7 @@ class EncryptionConfig:
         kdf_iterations: Number of PBKDF2 iterations for key derivation
         visualization_enabled: Enable live epicycle animation
         animation_speed: Animation playback speed multiplier (0.1 to 10.0)
+        reconstruction_enabled: Enable reconstruction after decryption
     """
     num_coefficients: Optional[int] = None
     use_ai_edge_detection: bool = True
@@ -54,6 +56,7 @@ class EncryptionConfig:
     kdf_iterations: int = 100_000
     visualization_enabled: bool = False
     animation_speed: float = 1.0
+    reconstruction_enabled: bool = False
 
 
 @dataclass
@@ -64,12 +67,14 @@ class SystemConfig:
     Attributes:
         encryption: Encryption and AI feature configuration
         preprocessing: Image preprocessing configuration
+        reconstruction: Image reconstruction configuration
         ai_models: Paths to AI model files
         performance: Performance-related settings (threads, GPU)
         logging: Logging configuration (levels, output paths)
     """
     encryption: EncryptionConfig = field(default_factory=EncryptionConfig)
     preprocessing: PreprocessConfig = field(default_factory=PreprocessConfig)
+    reconstruction: ReconstructionConfig = field(default_factory=ReconstructionConfig)
     ai_models: Dict[str, Path] = field(default_factory=dict)
     performance: Dict[str, Any] = field(default_factory=dict)
     logging: Dict[str, str] = field(default_factory=dict)
@@ -158,7 +163,8 @@ class SystemConfig:
                 use_anomaly_detection=encryption_data.get('use_anomaly_detection', True),
                 kdf_iterations=kdf_iterations,
                 visualization_enabled=encryption_data.get('visualization_enabled', False),
-                animation_speed=animation_speed
+                animation_speed=animation_speed,
+                reconstruction_enabled=encryption_data.get('reconstruction_enabled', False)
             )
             
             # Parse preprocessing config with environment variable overrides
@@ -182,6 +188,19 @@ class SystemConfig:
                 denoise_strength=denoise_strength
             )
             
+            # Parse reconstruction config
+            reconstruction_data = data.get('reconstruction', {})
+            reconstruction = ReconstructionConfig(
+                mode=reconstruction_data.get('mode', 'animated'),
+                speed=reconstruction_data.get('speed', 1.0),
+                quality=reconstruction_data.get('quality', 'balanced'),
+                save_frames=reconstruction_data.get('save_frames', False),
+                save_animation=reconstruction_data.get('save_animation', False),
+                output_format=reconstruction_data.get('output_format', 'mp4'),
+                output_path=reconstruction_data.get('output_path'),
+                backend=reconstruction_data.get('backend', 'pyqtgraph')
+            )
+            
             # Parse AI models paths
             ai_models_data = data.get('ai_models', {})
             ai_models = {k: Path(v) for k, v in ai_models_data.items()}
@@ -195,6 +214,7 @@ class SystemConfig:
             config = cls(
                 encryption=encryption,
                 preprocessing=preprocessing,
+                reconstruction=reconstruction,
                 ai_models=ai_models,
                 performance=performance,
                 logging=logging_config

@@ -17,6 +17,8 @@ from fourier_encryption.models.data_models import (
     OptimizationResult,
     AnomalyReport,
     Metrics,
+    ReconstructionConfig,
+    ReconstructionResult,
 )
 
 __all__ = [
@@ -36,4 +38,6 @@ __all__ = [
     "OptimizationResult",
     "AnomalyReport",
     "Metrics",
+    "ReconstructionConfig",
+    "ReconstructionResult",
 ]
