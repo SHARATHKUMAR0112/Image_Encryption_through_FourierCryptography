@@ -1,0 +1,71 @@
+# Training Configuration for Coefficient Optimizer Model
+# Regression model for predicting optimal coefficient counts
+# Training time: ~2-4 hours on single GPU
+
+training:
+  name: coefficient_optimizer_v1
+  mode: production
+  description: "Regression model for optimal coefficient count prediction"
+
+dataset:
+  train_path: data/coefficient_optimization/train_features.npz
+  val_path: data/coefficient_optimization/val_features.npz
+  test_path: data/coefficient_optimization/test_features.npz
+  batch_size: 64
+  num_workers: 4
+  
+  # Feature extraction settings
+  features:
+    - edge_density
+    - frequency_content
+    - texture_complexity
+    - contrast
+    - entropy
+  
+  # Target range
+  target_range: [10, 1000]  # Coefficient count range
+
+model:
+  architecture: MLP
+  input_dim: 5  # Number of features
+  hidden_dims: [128, 64, 32]
+  output_dim: 1  # Coefficient count
+  dropout: 0.2
+  batch_norm: true
+  activation: relu
+
+optimizer:
+  type: Adam
+  learning_rate: 1e-3
+  weight_decay: 1e-4
+
+scheduler:
+  type: ReduceLROnPlateau
+  mode: min
+  factor: 0.5
+  patience: 10
+  min_lr: 1e-6
+
+loss:
+  type: MSE
+  # Alternative: Huber loss for robustness to outliers
+
+training_params:
+  num_epochs: 100
+  early_stopping_patience: 15
+  save_frequency: 10
+  gradient_clip: 1.0
+
+logging:
+  use_wandb: true
+  wandb_project: fourier-encryption-optimizer
+  log_frequency: 20
+
+evaluation:
+  metrics: [rmse, mae, r2_score]
+  
+  # Performance targets
+  targets:
+    max_rmse: 10.0  # coefficients
+    max_mae: 5.0    # coefficients
+    min_r2: 0.85

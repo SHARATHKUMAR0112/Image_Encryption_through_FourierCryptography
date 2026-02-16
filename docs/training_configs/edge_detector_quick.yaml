@@ -1,0 +1,59 @@
+# Quick Training Configuration for Edge Detection Model
+# Use this for rapid prototyping and development
+# Training time: ~2-3 hours on single GPU
+
+training:
+  name: edge_detector_quick_dev
+  mode: development
+  description: "Quick training for development and testing"
+  
+dataset:
+  train_path: data/edge_detection/train_small
+  val_path: data/edge_detection/val_small
+  batch_size: 16
+  num_workers: 2
+  augmentation: basic
+  cache_dataset: false
+  
+  # Data split (if creating from scratch)
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+model:
+  architecture: UNet
+  in_channels: 1
+  out_channels: 1
+  base_filters: 32  # Smaller for faster training
+  depth: 4
+  dropout: 0.1
+
+optimizer:
+  type: Adam
+  learning_rate: 1e-4
+  weight_decay: 1e-5
+  betas: [0.9, 0.999]
+
+scheduler:
+  type: ReduceLROnPlateau
+  mode: min
+  factor: 0.5
+  patience: 5
+  min_lr: 1e-7
+
+training_params:
+  num_epochs: 20
+  early_stopping_patience: 5
+  save_frequency: 5
+  gradient_clip: 1.0
+  mixed_precision: false  # Disable for debugging
+
+logging:
+  use_wandb: false
+  log_frequency: 10
+  save_samples: true
+  sample_frequency: 5
+
+evaluation:
+  metrics: [f1_score, precision, recall]
+  save_predictions: false

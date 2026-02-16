@@ -1,0 +1,91 @@
+# Hyperparameter Search Configuration
+# Use this for automated hyperparameter optimization
+# Search time: ~24-72 hours depending on search space
+
+training:
+  name: edge_detector_hpsearch
+  mode: hyperparameter_search
+  description: "Bayesian optimization for hyperparameter tuning"
+
+search:
+  method: bayesian  # Options: grid, random, bayesian
+  num_trials: 50
+  metric: val_f1_score
+  direction: maximize
+  timeout_per_trial: 7200  # 2 hours per trial
+  
+  # Pruning strategy
+  pruning:
+    enabled: true
+    type: median
+    n_startup_trials: 5
+    n_warmup_steps: 10
+
+search_space:
+  # Learning rate
+  learning_rate:
+    type: loguniform
+    low: 1e-5
+    high: 1e-3
+  
+  # Batch size
+  batch_size:
+    type: categorical
+    choices: [8, 16, 32, 64]
+  
+  # Model architecture
+  base_filters:
+    type: categorical
+    choices: [32, 64, 128]
+  
+  depth:
+    type: int
+    low: 3
+    high: 6
+  
+  # Regularization
+  dropout:
+    type: uniform
+    low: 0.0
+    high: 0.5
+  
+  weight_decay:
+    type: loguniform
+    low: 1e-6
+    high: 1e-3
+  
+  # Optimizer
+  optimizer_type:
+    type: categorical
+    choices: [Adam, AdamW, SGD]
+  
+  # Augmentation strength
+  augmentation_strength:
+    type: uniform
+    low: 0.3
+    high: 0.8
+
+dataset:
+  train_path: data/edge_detection/train
+  val_path: data/edge_detection/val
+  num_workers: 4
+  augmentation: advanced
+
+model:
+  architecture: UNet
+  # Other params will be set by search
+
+training_params:
+  num_epochs: 30  # Shorter for search
+  early_stopping_patience: 5
+  mixed_precision: true
+
+logging:
+  use_wandb: true
+  wandb_project: fourier-encryption-hpsearch
+  log_frequency: 50
+
+# Best configuration will be saved to
+output:
+  best_config_path: config/best_hyperparameters.yaml
+  study_path: studies/hpsearch_study.pkl

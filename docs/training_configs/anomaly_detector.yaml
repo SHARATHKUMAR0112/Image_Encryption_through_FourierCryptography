@@ -1,0 +1,83 @@
+# Training Configuration for Anomaly Detection Model
+# Binary classifier for detecting tampered coefficients
+# Training time: ~3-6 hours on single GPU
+
+training:
+  name: anomaly_detector_v1
+  mode: production
+  description: "Binary classifier for tamper detection in Fourier coefficients"
+
+dataset:
+  train_path: data/anomaly_detection/train_coefficients.npz
+  val_path: data/anomaly_detection/val_coefficients.npz
+  test_path: data/anomaly_detection/test_coefficients.npz
+  batch_size: 32
+  num_workers: 4
+  
+  # Class distribution
+  class_balance:
+    normal: 0.7
+    anomalous: 0.3
+  
+  # Anomaly types to generate
+  anomaly_types:
+    - amplitude_tamper
+    - phase_tamper
+    - frequency_gap
+    - distribution_violation
+
+model:
+  architecture: MLP
+  input_dim: 1000  # Max coefficient count
+  hidden_dims: [512, 256, 128]
+  output_dim: 1  # Binary classification
+  dropout: 0.3
+  batch_norm: true
+  activation: relu
+
+optimizer:
+  type: Adam
+  learning_rate: 5e-4
+  weight_decay: 1e-4
+
+scheduler:
+  type: ReduceLROnPlateau
+  mode: max  # Maximize F1 score
+  factor: 0.5
+  patience: 8
+  min_lr: 1e-7
+
+loss:
+  type: BCEWithLogits
+  pos_weight: 2.0  # Weight for anomalous class (handle imbalance)
+
+training_params:
+  num_epochs: 100
+  early_stopping_patience: 15
+  save_frequency: 10
+  gradient_clip: 1.0
+  mixed_precision: false
+
+logging:
+  use_wandb: true
+  wandb_project: fourier-encryption-anomaly-detection
+  log_frequency: 25
+  save_confusion_matrix: true
+
+evaluation:
+  metrics: [accuracy, precision, recall, f1_score, auc_roc]
+  
+  # Performance targets
+  targets:
+    min_accuracy: 0.95
+    min_precision: 0.95
+    min_recall: 0.95
+    min_f1: 0.95
+    max_false_positive_rate: 0.05
+  
+  # Threshold tuning
+  threshold_search:
+    enabled: true
+    metric: f1_score
+    range: [0.3, 0.7]
+    steps: 20

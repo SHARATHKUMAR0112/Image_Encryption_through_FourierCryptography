@@ -1,0 +1,70 @@
+# Transfer Learning Configuration for Edge Detection Model
+# Use this when you have a pretrained model and want to fine-tune on custom data
+# Training time: ~4-8 hours on single GPU
+
+training:
+  name: edge_detector_transfer_custom_domain
+  mode: transfer_learning
+  description: "Fine-tune pretrained edge detector on custom domain data"
+  
+pretrained:
+  model_path: models/pretrained_edge_detector_v1.0.0.pth
+  freeze_encoder: true
+  freeze_epochs: 10  # Unfreeze encoder after 10 epochs
+  load_optimizer: false
+
+dataset:
+  train_path: data/custom_domain/train
+  val_path: data/custom_domain/val
+  test_path: data/custom_domain/test
+  batch_size: 16
+  num_workers: 4
+  augmentation: domain_specific
+  
+  # Domain-specific augmentation
+  augmentation_config:
+    horizontal_flip: 0.5
+    rotation_limit: 15  # Less aggressive for specific domain
+    brightness_contrast: 0.15
+    custom_transforms: true
+
+model:
+  architecture: UNet
+  load_pretrained: true
+  fine_tune_layers: [decoder, output]
+  # Encoder will be frozen initially
+
+optimizer:
+  type: Adam
+  learning_rate: 1e-5  # Lower LR for fine-tuning
+  weight_decay: 1e-5
+  
+  # Different LR for different layers
+  layer_lr_multipliers:
+    encoder: 0.1
+    decoder: 1.0
+    output: 1.0
+
+scheduler:
+  type: CosineAnnealingWarmRestarts
+  T_0: 10
+  T_mult: 2
+  eta_min: 1e-7
+
+training_params:
+  num_epochs: 50
+  early_stopping_patience: 10
+  save_frequency: 5
+  gradient_clip: 1.0
+  mixed_precision: true
+  warmup_epochs: 5
+
+logging:
+  use_wandb: true
+  wandb_project: fourier-encryption-transfer-learning
+  log_frequency: 20
+  save_samples: true
+
+evaluation:
+  metrics: [f1_score, precision, recall]
+  compare_with_pretrained: true

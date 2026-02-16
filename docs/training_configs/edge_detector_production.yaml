@@ -1,0 +1,84 @@
+# Production Training Configuration for Edge Detection Model
+# Use this for final model training with full dataset
+# Training time: ~24-48 hours on single GPU
+
+training:
+  name: edge_detector_production_v1
+  mode: production
+  description: "Production-grade edge detection model with full dataset"
+  
+dataset:
+  train_path: data/edge_detection/train_full
+  val_path: data/edge_detection/val_full
+  test_path: data/edge_detection/test_full
+  batch_size: 32
+  num_workers: 8
+  augmentation: advanced
+  cache_dataset: true
+  
+  # Augmentation settings
+  augmentation_config:
+    horizontal_flip: 0.5
+    vertical_flip: 0.3
+    rotation_limit: 30
+    brightness_contrast: 0.2
+    gaussian_noise: 0.3
+    gaussian_blur: 0.3
+
+model:
+  architecture: UNet
+  in_channels: 1
+  out_channels: 1
+  base_filters: 64
+  depth: 5
+  dropout: 0.2
+  batch_norm: true
+  activation: relu
+
+optimizer:
+  type: AdamW
+  learning_rate: 1e-4
+  weight_decay: 1e-4
+  betas: [0.9, 0.999]
+  eps: 1e-8
+
+scheduler:
+  type: ReduceLROnPlateau
+  mode: min
+  factor: 0.5
+  patience: 10
+  min_lr: 1e-7
+  verbose: true
+
+training_params:
+  num_epochs: 200
+  early_stopping_patience: 20
+  save_frequency: 10
+  gradient_clip: 1.0
+  mixed_precision: true
+  warmup_epochs: 5
+
+loss:
+  type: BCE
+  # Alternative: DiceLoss, FocalLoss, or combination
+
+logging:
+  use_wandb: true
+  wandb_project: fourier-encryption-edge-detection
+  wandb_entity: your-team
+  log_frequency: 50
+  save_samples: true
+  sample_frequency: 10
+
+evaluation:
+  metrics: [f1_score, precision, recall, iou, dice]
+  save_predictions: true
+  compare_with_baseline: true
+  baseline_method: canny
+
+# Performance targets
+targets:
+  min_f1_score: 0.90
+  min_precision: 0.88
+  min_recall: 0.92
+  max_inference_time_ms: 50
